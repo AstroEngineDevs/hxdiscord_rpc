@@ -8,73 +8,56 @@ class Main
 {
 	public static function main():Void
 	{
-		Sys.println('Initializing Discord RPC...');
-
-		final handlers:DiscordEventHandlers = new DiscordEventHandlers();
+		var handlers:DiscordEventHandlers = DiscordEventHandlers.create();
 		handlers.ready = cpp.Function.fromStaticFunction(onReady);
 		handlers.disconnected = cpp.Function.fromStaticFunction(onDisconnected);
 		handlers.errored = cpp.Function.fromStaticFunction(onError);
-		Discord.Initialize("345229890980937739", cpp.RawPointer.addressOf(handlers), false, null);
+		Discord.Initialize("345229890980937739", cpp.RawPointer.addressOf(handlers), 1, null);
 
-		Thread.create(function():Void
+		// Daemon Thread
+		Thread.create(function()
 		{
 			while (true)
 			{
 				#if DISCORD_DISABLE_IO_THREAD
 				Discord.UpdateConnection();
 				#end
-
 				Discord.RunCallbacks();
 
+				// Wait 2 seconds until the next loop...
 				Sys.sleep(2);
 			}
 		});
 
-		Sys.sleep(10);
-
-		Sys.println('Shutting down Discord RPC...');
+		Sys.sleep(20);
 
 		Discord.Shutdown();
 	}
 
 	private static function onReady(request:cpp.RawConstPointer<DiscordUser>):Void
 	{
-		final username:String = request[0].username;
-		final globalName:String = request[0].username;
-		final discriminator:Int = Std.parseInt(request[0].discriminator);
+		var requestPtr:cpp.Star<DiscordUser> = cpp.ConstPointer.fromRaw(request).ptr;
 
-		if (discriminator != 0)
-			Sys.println('Discord: Connected to user ${username}#${discriminator} ($globalName)');
+		if (Std.parseInt(cast(requestPtr.discriminator, String)) != 0)
+			Sys.println('Discord: Connected to user (${cast(requestPtr.username, String)}#${cast(requestPtr.discriminator, String)})');
 		else
-			Sys.println('Discord: Connected to user @${username} ($globalName)');
+			Sys.println('Discord: Connected to user (${cast(requestPtr.username, String)})');
 
-		final discordPresence:DiscordRichPresence = new DiscordRichPresence();
-		discordPresence.type = DiscordActivityType_Watching;
+		var discordPresence:DiscordRichPresence = DiscordRichPresence.create();
 		discordPresence.state = "West of House";
 		discordPresence.details = "Frustration";
 		discordPresence.largeImageKey = "canary-large";
 		discordPresence.smallImageKey = "ptb-small";
-
-		final button:DiscordButton = new DiscordButton();
-		button.label = "Test 1";
-		button.url = "https://example.com";
-		discordPresence.buttons[0] = button;
-
-		final button:DiscordButton = new DiscordButton();
-		button.label = "Test 2";
-		button.url = "https://discord.gg/fortnite";
-		discordPresence.buttons[1] = button;
-
 		Discord.UpdatePresence(cpp.RawConstPointer.addressOf(discordPresence));
 	}
 
 	private static function onDisconnected(errorCode:Int, message:cpp.ConstCharStar):Void
 	{
-		Sys.println('Discord: Disconnected ($errorCode:$message)');
+		Sys.println('Discord: Disconnected ($errorCode: ${cast(message, String)})');
 	}
 
 	private static function onError(errorCode:Int, message:cpp.ConstCharStar):Void
 	{
-		Sys.println('Discord: Error ($errorCode:$message)');
+		Sys.println('Discord: Error ($errorCode: ${cast(message, String)})');
 	}
 }
